@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reality Search Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        .aspect-4-3 {
+            padding-bottom: 75%; /* 4:3 aspect ratio */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
+                Reality Search Engine
+            </h1>
+            <p class="text-gray-400">Search through your CCTV footage with natural language</p>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="max-w-3xl mx-auto mb-8">
+            <div class="relative">
+                <input 
+                    type="text" 
+                    id="searchInput"
+                    placeholder="Search for anything (e.g., 'a person', 'a dog', 'suspicious activity')"
+                    class="w-full px-6 py-4 rounded-full bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-white placeholder-gray-500"
+                    autocomplete="off"
+                >
+                <div class="absolute right-4 top-1/2 transform -translate-y-1/2">
+                    <div id="loadingIndicator" class="hidden">
+                        <div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="results-container">
+            <div id="results" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Initial state -->
+                <div class="col-span-full text-center text-gray-400 py-12">
+                    <p>Search for images using natural language</p>
+                    <p class="text-sm mt-2">Try: "a person", "suspicious activity", or "a dog"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const resultsContainer = document.getElementById('results');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        let searchTimeout;
+
+        // Function to create a result card
+        function createResultCard(result) {
+            const card = document.createElement('div');
+            card.className = 'bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 fade-in';
+            
+            card.innerHTML = `
+                <div class="relative aspect-4-3">
+                    <img src="${result.image_url}" 
+                         alt="${result.label}" 
+                         class="absolute h-full w-full object-cover">
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4">
+                        <div class="flex justify-between items-center">
+                            <span class="bg-blue-600/90 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                                ${result.label}
+                            </span>
+                            <span class="bg-gray-700/90 text-white text-xs px-2 py-1 rounded-full">
+                                ${Math.round(result.confidence * 100)}%
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-300 mt-1">
+                            ${new Date(result.timestamp).toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        // Function to handle search
+        async function handleSearch() {
+            const query = searchInput.value.trim();
+            
+            // Show loading state
+            loadingIndicator.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `query=${encodeURIComponent(query)}`
+                });
+                
+                const data = await response.json();
+                console.log('API Response:', data);
+
+                // Clear previous results
+                resultsContainer.innerHTML = '';
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                if (!data.results || data.results.length === 0) {
+                    showNoResults(query);
+                    return;
+                }
+
+                // Add results to the grid
+                data.results.forEach(result => {
+                    const card = createResultCard(result);
+                    resultsContainer.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('Search error:', error);
+                showError('Failed to perform search. Please try again.');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        // Helper functions
+        function showError(message) {
+            resultsContainer.innerHTML = `
+                <div class="col-span-full text-center text-red-400 py-12">
+                    <p>${message}</p>
+                </div>`;
+        }
+
+        function showNoResults(query) {
+            resultsContainer.innerHTML = `
+                <div class="col-span-full text-center text-gray-400 py-12">
+                    <p>No results found for "${query}"</p>
+                    <p class="text-sm mt-2">Try different search terms like "person", "dog", or "suspicious activity"</p>
+                </div>`;
+        }
+
+        // Event listeners
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(handleSearch, 500);
+        });
+
+        // Handle Enter key
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                clearTimeout(searchTimeout);
+                handleSearch();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
